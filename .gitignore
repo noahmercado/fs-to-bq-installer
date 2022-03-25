@@ -1,0 +1,10 @@
+.env
+firestore-to-bq-installer
+fs-to-bq-installer
+collections.txt
+stream_all_collections.sh
+key.json
+config/
+.firebaserc
+vendor
+bin/

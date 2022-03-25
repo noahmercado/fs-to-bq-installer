@@ -1,0 +1,13 @@
+{
+    "dockerFile": "Dockerfile",
+    "extensions": [
+        "ms-azuretools.vscode-docker",
+        "golang.go",
+        "HookyQR.beautify"
+    ],
+    "mounts": [
+        "source=${localEnv:HOME}/.config/gcloud,target=/root/.config/gcloud,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.zshrc,target=/root/.zshrc,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.oh-my-zsh,target=/root/.oh-my-zsh,type=bind,consistency=cached"
+    ]
+}
