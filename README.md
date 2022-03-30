@@ -51,7 +51,7 @@ Usage of ./fs-to-bq-installer:
   -clustering data,document_id,timestamp
         This parameter will allow you to set up Clustering for the BigQuery Table created by the extension. (for example: data,document_id,timestamp- no whitespaces). You can select up to 4 comma separated fields(order matters). Available schema extensions table fields for clustering: `document_id, timestamp, event_id, operation, data`.
   -dataset-id string
-        The ID of the BigQuery dataset (default "globus_cataloger_poc_240de_firestore_export")
+        The ID of the BigQuery dataset (default "<YOUR_PROJECT_ID>_firestore_export")
   -dataset-location string
         Where do you want to deploy the BigQuery dataset created for this extension? For help selecting a location, refer to the [location selection guide](https://cloud.google.com/bigquery/docs/locations). (default "us")
   -exclude string
