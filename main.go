@@ -277,7 +277,7 @@ func (p *Params) getArgs() {
 	flag.StringVar(&p.BACKUP_COLLECTION, "backup-collection", "", "This (optional) parameter will allow you to specify a collection for which failed BigQuery updates will be written to.")
 	flag.StringVar(&p.TRANSFORM_FUNCTION, "transform-function-url", "", "Specify a function URL to call that will transform the payload that will be written to BigQuery. See the pre-install documentation for more details.")
 
-	flag.BoolVar(&recursive, "-recursive", false, "When -include == 'ALL', -recursive will crawl Firestore to include all subcollections")
+	// flag.BoolVar(&recursive, "-recursive", false, "When -include == 'ALL', -recursive will crawl Firestore to include all subcollections")
 	flag.StringVar(&include, "include", "", "A comma separated list of collection names to include. Set to 'ALL' to include all collections")
 	flag.StringVar(&exclude, "exclude", "", "A comma separated list of collection names to exclude when include is set to 'ALL'")
 	flag.IntVar(&maxWorkers, "max-workers", 5, "The maximum number of works to run in parallel when deploying the extension")
