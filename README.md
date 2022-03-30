@@ -41,7 +41,7 @@ docker run -it -v $CLOUDSDK_CONFIG:/home/installer/.config/gcloud noahmercado/fs
 
 ## Usage
 ```bash
-Usage of ./fs-to-bq-installer:
+Usage of fs-to-bq-installer:
   --recursive
         When -include == 'ALL', -recursive will crawl Firestore to include all subcollections
   --wildcard-ids
