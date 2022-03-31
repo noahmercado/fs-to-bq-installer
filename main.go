@@ -122,7 +122,7 @@ func deployExtension(p *Params, o *os.File, e *os.File) {
 		"firebase/firestore-bigquery-export",
 		"--force",
 		"--non-interactive")
-	cmd.Stdin = strings.NewReader(fmt.Sprintf("fs-to-bq-%s", strings.Replace((*p).TABLE_ID, "_", "-", -1)))
+	cmd.Stdin = strings.NewReader(fmt.Sprintf("fs-to-bq-%s", strings.ToLower(strings.Replace((*p).TABLE_ID, "_", "-", -1))))
 	cmd.Stdout = o
 	cmd.Stderr = e
 
