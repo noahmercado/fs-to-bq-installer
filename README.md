@@ -1,7 +1,7 @@
 # Firestore to BigQuery Extension Installer
 The [`Stream Collections to BigQuery`](https://firebase.google.com/products/extensions/firebase-firestore-bigquery-export) extension for Firebase sends realtime, incremental updates from a specified Cloud Firestore Collection to BigQuery. The current implementation of the extension requires it to be installed for every collection that you want to keep in sync. Additionally, the extension does not backload existing data into BigQuery once installed, nor does it convert the documents to a typed columnar format. There are instead separate scripts that must be run in order to backload historical data, as well as extrapolate out the nested JSON from your Firestore data. For large scale Firestore instances, this multi-step manual and multistep process makes the extension extremely difficult to leverage.
 
-This utility will automatically install multiple instances of the extension in parallel, reducing deployment time from `~5m * N (extensions)` to just `~5m`. It also takes care of backloading existing Firestore data, while creating typed BigQuery Views of your data by auto-generating schema definitions for your existing Collecitons.
+This utility will automatically install multiple instances of the extension in parallel, reducing deployment time from `~5m * N (extensions)` to just `~5m`. It also takes care of backloading existing Firestore data, while creating typed BigQuery Views of your data by auto-generating schema definitions for your existing Collections.
   
   
 ## Disclaimer
