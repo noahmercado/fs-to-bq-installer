@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/genproto/googleapis/type/latlng"
+
 	"cloud.google.com/go/firestore"
 	"github.com/joho/godotenv"
 	"google.golang.org/api/iterator"
@@ -43,6 +45,16 @@ type Params struct {
 	TRANSFORM_FUNCTION                string `default:""`
 }
 
+type SchemaField struct {
+	Name   string           `json:"name"`
+	Type   string           `json:"type"`
+	Fields *FirestoreSchema `json:"fields,omitempty"`
+}
+
+type FirestoreSchema struct {
+	Fields []SchemaField `json:"fields"`
+}
+
 type FirebaseRC struct {
 	Projects struct {
 		Default string `json:"default"`
@@ -55,26 +67,55 @@ func main() {
 
 	commonParams.getArgs()
 
-	collections := getCollections(commonParams.BIGQUERY_PROJECT_ID, include, exclude, recursive)
+	collections := getSchemas(commonParams.BIGQUERY_PROJECT_ID, include, exclude, recursive)
 
 	var wg sync.WaitGroup
 	sem := make(chan string, maxWorkers)
 
-	wg.Add(len(collections))
-	for _, c := range collections {
+	wg.Add(len(*collections))
+	for c, s := range *collections {
 		sem <- c
-		go worker(&commonParams, c, sem, &wg)
+		go worker(&commonParams, c, sem, &wg, s)
 	}
 	wg.Wait()
 }
 
-func worker(p *Params, c string, ch <-chan string, wg *sync.WaitGroup) {
+func worker(p *Params, c string, ch <-chan string, wg *sync.WaitGroup, s FirestoreSchema) {
 	defer (*wg).Done()
 	cp := getCollectionParams(*p, c)
 	o, e := mkOutputFiles(cp)
 	deployExtension(cp, o, e)
 	loadTable(cp, o, e)
+	createTypedViews(cp, s, o, e)
+
 	<-ch
+}
+
+func createTypedViews(p *Params, s FirestoreSchema, o *os.File, e *os.File) {
+	fmt.Printf("Creating typed views for %s...\n", (*p).COLLECTION_PATH)
+
+	schemaPath, err := createSchemaFile(p, s)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	o.WriteString(fmt.Sprintf("\n%s\n", time.Now().Local().String()))
+	e.WriteString(fmt.Sprintf("\n%s\n", time.Now().Local().String()))
+
+	cmd := exec.Command("npx",
+		"@firebaseextensions/fs-bq-schema-views",
+		"--non-interactive",
+		fmt.Sprintf("--project=%s", (*p).BIGQUERY_PROJECT_ID),
+		fmt.Sprintf("--dataset=%s", (*p).DATASET_ID),
+		fmt.Sprintf("--table-name-prefix=%s", (*p).TABLE_ID),
+		fmt.Sprintf("--schema-files=%s", schemaPath))
+
+	cmd.Stdout = o
+	cmd.Stderr = e
+
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getCollectionParams(p Params, c string) *Params {
@@ -169,6 +210,17 @@ func createEnvFile(p *Params) error {
 	return godotenv.Write(env, fmt.Sprintf("%s/%s/.env", tmpDir, (*p).TABLE_ID))
 }
 
+func createSchemaFile(p *Params, s FirestoreSchema) (string, error) {
+	file, err := json.MarshalIndent(s, "", "\t")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	f := fmt.Sprintf("%s/%s/schema.json", tmpDir, (*p).TABLE_ID)
+	return f, ioutil.WriteFile(f, file, 0644)
+}
+
 func mkDir(d string) {
 	if err := os.MkdirAll(d, os.ModePerm); err != nil {
 		log.Fatal(err)
@@ -181,7 +233,7 @@ func rmTmpDir() {
 	}
 }
 
-func getCollections(project string, i string, e string, r bool) []string {
+func getSchemas(project string, i string, e string, r bool) *map[string]FirestoreSchema {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, project)
 	if err != nil {
@@ -190,7 +242,7 @@ func getCollections(project string, i string, e string, r bool) []string {
 	include := strings.Split(i, ",")
 	exclude := strings.Split(e, ",")
 
-	var cols []string
+	schemas := make(map[string]FirestoreSchema)
 
 	if include[0] == "ALL" {
 		iter := client.Collections(ctx)
@@ -204,14 +256,111 @@ func getCollections(project string, i string, e string, r bool) []string {
 				log.Fatal(err)
 			}
 			if !contains(exclude, collRef.ID) {
-				cols = append(cols, collRef.ID)
+				docRefs := collRef.DocumentRefs(ctx)
+				for {
+					docRef, err := docRefs.Next()
+					if err == iterator.Done {
+						break
+					}
+					if err != nil {
+						log.Fatal(err)
+					}
+					docSnap, err := docRef.Get(ctx)
+					if err != nil {
+						log.Fatal(err)
+					}
+					schemas[collRef.ID] = *inferSchema(docSnap.Data())
+					break
+				}
 			}
 		}
 	} else {
-		cols = include
-	}
+		for _, col := range include {
+			collRef := client.Collection(col)
+			docRefs := collRef.DocumentRefs(ctx)
+			for {
+				docRef, err := docRefs.Next()
+				if err == iterator.Done {
+					break
+				}
+				if err != nil {
+					log.Fatal(err)
+				}
+				docSnap, err := docRef.Get(ctx)
+				if err != nil {
+					log.Fatal(err)
+				}
+				schemas[collRef.ID] = *inferSchema(docSnap.Data())
+				break
+			}
+		}
 
-	return cols
+	}
+	return &schemas
+}
+
+func inferSchema(d map[string]interface{}) *FirestoreSchema {
+	var schema FirestoreSchema
+
+	for k, v := range d {
+		switch v.(type) {
+		case nil:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "null",
+			})
+		case bool:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "boolean",
+			})
+		case string:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "string",
+			})
+		case int64:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "number",
+			})
+		case float64:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "number",
+			})
+		case time.Time:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "timestamp",
+			})
+		case []interface{}:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "array",
+			})
+		case map[string]interface{}:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name:   k,
+				Type:   "map",
+				Fields: inferSchema(v.(map[string]interface{})),
+			})
+		case *latlng.LatLng:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "geopoint",
+			})
+		case *firestore.DocumentRef:
+			schema.Fields = append(schema.Fields, SchemaField{
+				Name: k,
+				Type: "reference",
+			})
+		default:
+			fmt.Printf("Unable to infer type for %s", k)
+		}
+
+	}
+	return &schema
 }
 
 func contains(s []string, e string) bool {
